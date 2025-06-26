@@ -7,6 +7,7 @@ use OpenPix\PhpSdk\Resources\Accounts;
 use OpenPix\PhpSdk\Resources\Charges;
 use OpenPix\PhpSdk\Resources\Customers;
 use OpenPix\PhpSdk\Resources\Partners;
+use OpenPix\PhpSdk\Resources\Statements;
 use OpenPix\PhpSdk\Resources\Transactions;
 use OpenPix\PhpSdk\Resources\Subscriptions;
 use OpenPix\PhpSdk\Resources\Webhooks;
@@ -130,5 +131,13 @@ class Client
     public function accounts(): Accounts
     {
         return new Accounts($this->requestTransport);
+    }
+
+    /**
+     * Returns operations for the `Statements` resource.
+     */
+    public function statements(): Statements
+    {
+        return new Statements($this->requestTransport);
     }
 }
