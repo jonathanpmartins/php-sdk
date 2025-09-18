@@ -180,7 +180,7 @@ class Paginator implements Iterator
             return true;
         }
 
-        return $this->getPagination()["hasNextPage"];
+        return $this->skip < $this->getPagination()["totalCount"];
     }
 
     /**
