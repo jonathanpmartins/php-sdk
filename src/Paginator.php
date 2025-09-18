@@ -79,7 +79,6 @@ class Paginator implements Iterator
     public function __construct(
         RequestTransport $requestTransport,
         Request $listRequest,
-        /** @phpstan-ignore-next-line */
         array $lastResult = null
     ) {
         $this->requestTransport = $requestTransport;
