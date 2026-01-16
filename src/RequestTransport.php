@@ -139,7 +139,7 @@ class RequestTransport
             $error = $contents["error"];
 
             if (is_array($error)) {
-                $error = $error["message"] ?? $error["description"];
+                $error = $error["message"] ?? $error["description"] ?? json_encode($error);
             }
 
             throw new ApiErrorException($error);
