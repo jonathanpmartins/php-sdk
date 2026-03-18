@@ -371,6 +371,105 @@ final class PaginatorTest extends TestCase
         $this->assertFalse($paginator->valid(), 'Should be invalid when skip > totalCount');
     }
 
+    public function testValidWithoutTotalCountUsesHasNextPage(): void
+    {
+        $resultWithNextPage = [
+            "pageInfo" => [
+                "skip" => 0,
+                "limit" => 30,
+                "hasNextPage" => true,
+                "hasPreviousPage" => false
+            ]
+        ];
+
+        $paginator = $this->makePaginator($resultWithNextPage);
+        $this->assertTrue($paginator->valid(), 'Should be valid when hasNextPage is true and totalCount is missing');
+
+        $resultWithoutNextPage = [
+            "pageInfo" => [
+                "skip" => 0,
+                "limit" => 30,
+                "hasNextPage" => false,
+                "hasPreviousPage" => false
+            ]
+        ];
+
+        $paginator = $this->makePaginator($resultWithoutNextPage);
+        $this->assertFalse($paginator->valid(), 'Should be invalid when hasNextPage is false and totalCount is missing');
+    }
+
+    public function testGetTotalResourcesCountWithoutTotalCount(): void
+    {
+        $paginator = $this->makePaginator([
+            "pageInfo" => [
+                "skip" => 0,
+                "limit" => 30,
+                "hasNextPage" => false,
+                "hasPreviousPage" => false
+            ]
+        ]);
+
+        $this->assertSame(0, $paginator->getTotalResourcesCount());
+    }
+
+    public function testMultiPageWithoutTotalCount(): void
+    {
+        $responses = [
+            [
+                'transactions' => [
+                    ['id' => 't1', 'amount' => 1000],
+                    ['id' => 't2', 'amount' => 2000],
+                ],
+                'pageInfo' => [
+                    'skip' => 0,
+                    'limit' => 2,
+                    'hasPreviousPage' => false,
+                    'hasNextPage' => true
+                ]
+            ],
+            [
+                'transactions' => [
+                    ['id' => 't3', 'amount' => 3000],
+                ],
+                'pageInfo' => [
+                    'skip' => 2,
+                    'limit' => 2,
+                    'hasPreviousPage' => true,
+                    'hasNextPage' => false
+                ]
+            ]
+        ];
+
+        $listRequestMock = $this->createMock(Request::class);
+        $listRequestMock->expects($this->exactly(2))
+            ->method("pagination")
+            ->willReturnSelf();
+
+        $requestTransportMock = $this->createMock(RequestTransport::class);
+        $requestTransportMock->expects($this->exactly(2))
+            ->method('transport')
+            ->with($listRequestMock)
+            ->willReturnOnConsecutiveCalls(...$responses);
+
+        $paginator = new Paginator($requestTransportMock, $listRequestMock);
+        $paginator->perPage(2);
+
+        $iterations = 0;
+        $allTransactions = [];
+
+        foreach ($paginator as $result)
+        {
+            $iterations++;
+            foreach ($result['transactions'] as $transaction)
+            {
+                $allTransactions[] = $transaction;
+            }
+        }
+
+        $this->assertSame(2, $iterations, 'Should iterate through both pages');
+        $this->assertCount(3, $allTransactions, 'Should process all 3 transactions');
+    }
+
     private function testPaginatorNavigation(callable $navigate, int $expectedSkip = 0, int $skip = 0, int $perPage = 30): void
     {
         $paginator = $this->makePaginator();

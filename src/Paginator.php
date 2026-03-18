@@ -28,7 +28,7 @@ use TypeError;
  * ```
  *
  * @implements Iterator<int, array<array>>
- * @phpstan-type Pagination array{skip: int, limit: int, totalCount: int, hasPreviousPage: bool, hasNextPage: bool}
+ * @phpstan-type Pagination array{skip: int, limit: int, totalCount?: int, hasPreviousPage: bool, hasNextPage: bool}
  */
 class Paginator implements Iterator
 {
@@ -180,7 +180,13 @@ class Paginator implements Iterator
             return true;
         }
 
-        return $this->skip < $this->getPagination()["totalCount"];
+        $pagination = $this->getPagination();
+
+        if (isset($pagination["totalCount"])) {
+            return $this->skip < $pagination["totalCount"];
+        }
+
+        return $pagination["hasNextPage"] ?? false;
     }
 
     /**
@@ -197,7 +203,7 @@ class Paginator implements Iterator
      */
     public function getTotalResourcesCount(): int
     {
-        return $this->getPagination()["totalCount"];
+        return $this->getPagination()["totalCount"] ?? 0;
     }
 
     /**
