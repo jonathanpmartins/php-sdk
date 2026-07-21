@@ -2,7 +2,9 @@
 
 namespace Tests;
 
+use JsonException;
 use OpenPix\PhpSdk\ApiErrorException;
+use OpenPix\PhpSdk\UnreadableResponseException;
 use OpenPix\PhpSdk\Client;
 use OpenPix\PhpSdk\RequestTransport;
 use PHPUnit\Framework\TestCase;
@@ -78,6 +80,61 @@ final class RequestTransportTest extends TestCase
         $this->expectException(ApiErrorException::class);
         $this->expectExceptionMessage($message);
         $this->testApiErrorHandlingFor(["message" => $message]);
+    }
+
+    public function testShouldHandleTruncatedResponseBody(): void
+    {
+        try {
+            $this->transportResponseBody('{"charge": {"correlationID": "abc"', 200);
+            $this->fail("Expected " . UnreadableResponseException::class . " to be thrown.");
+        } catch (UnreadableResponseException $unreadableResponseException) {
+            $this->assertSame("Response body could not be decoded.", $unreadableResponseException->getMessage());
+            $this->assertSame(200, $unreadableResponseException->getStatusCode());
+            $this->assertInstanceOf(JsonException::class, $unreadableResponseException->getPrevious());
+        }
+    }
+
+    public function testShouldHandleNonObjectResponseBody(): void
+    {
+        try {
+            $this->transportResponseBody('"ok"', 200);
+            $this->fail("Expected " . UnreadableResponseException::class . " to be thrown.");
+        } catch (UnreadableResponseException $unreadableResponseException) {
+            $this->assertSame("Response body is not an object.", $unreadableResponseException->getMessage());
+            $this->assertSame(200, $unreadableResponseException->getStatusCode());
+            $this->assertNull($unreadableResponseException->getPrevious());
+        }
+    }
+
+    private function transportResponseBody(string $body, int $statusCode): void
+    {
+        $requestMock = $this->createMock(RequestInterface::class);
+        $requestMock
+            ->method("withAddedHeader")
+            ->willReturn($requestMock);
+
+        $responseMock = $this->createConfiguredMock(ResponseInterface::class, [
+            "getBody" => $this->createConfiguredMock(StreamInterface::class, [
+                "getContents" => $body,
+            ]),
+            "getStatusCode" => $statusCode,
+        ]);
+
+        $httpClientMock = $this->createMock(ClientInterface::class);
+        $httpClientMock->expects($this->once())
+            ->method("sendRequest")
+            ->with($requestMock)
+            ->willReturn($responseMock);
+
+        $requestTransport = new RequestTransport(
+            "appId",
+            "https://example.com",
+            $httpClientMock,
+            $this->createMock(RequestFactoryInterface::class),
+            $this->createMock(StreamFactoryInterface::class),
+        );
+
+        $requestTransport->transport($requestMock);
     }
 
     /**

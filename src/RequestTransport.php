@@ -2,7 +2,7 @@
 
 namespace OpenPix\PhpSdk;
 
-use TypeError;
+use JsonException;
 use Http\Discovery\Psr17FactoryDiscovery;
 use Http\Discovery\Psr18ClientDiscovery;
 use Psr\Http\Client\ClientInterface;
@@ -129,10 +129,21 @@ class RequestTransport
      */
     private function hydrateResponse(ResponseInterface $response): array
     {
-        $contents = json_decode($response->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
+        try {
+            $contents = json_decode($response->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException $jsonException) {
+            throw new UnreadableResponseException(
+                "Response body could not be decoded.",
+                $response->getStatusCode(),
+                $jsonException
+            );
+        }
 
         if (!is_array($contents)) {
-            throw new TypeError("Invalid response from API.");
+            throw new UnreadableResponseException(
+                "Response body is not an object.",
+                $response->getStatusCode()
+            );
         }
 
         if (!empty($contents["error"])) {
