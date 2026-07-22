@@ -129,12 +129,19 @@ class RequestTransport
      */
     private function hydrateResponse(ResponseInterface $response): array
     {
+        $statusCode = $response->getStatusCode();
+
+        // A 204 has no body by definition, so there is nothing to decode.
+        if ($statusCode === 204) {
+            return [];
+        }
+
         try {
             $contents = json_decode($response->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
         } catch (JsonException $jsonException) {
             throw new UnreadableResponseException(
                 "Response body could not be decoded.",
-                $response->getStatusCode(),
+                $statusCode,
                 $jsonException
             );
         }
@@ -142,20 +149,53 @@ class RequestTransport
         if (!is_array($contents)) {
             throw new UnreadableResponseException(
                 "Response body is not an object.",
-                $response->getStatusCode()
+                $statusCode
             );
         }
 
         if (!empty($contents["error"])) {
-            $error = $contents["error"];
+            throw new ApiErrorException($this->errorMessage($contents["error"]), $statusCode, $contents);
+        }
 
-            if (is_array($error)) {
-                $error = $error["message"] ?? $error["description"] ?? json_encode($error);
-            }
-
-            throw new ApiErrorException($error);
+        // An error status without the `error` key is still an error: returning it
+        // as data would make a rejected request indistinguishable from a successful one.
+        if ($statusCode >= 400) {
+            throw new ApiErrorException($this->statusErrorMessage($response, $contents), $statusCode, $contents);
         }
 
         return $contents;
+    }
+
+    /**
+     * Extract the message of the `error` key of a response body.
+     *
+     * @param mixed $error
+     */
+    private function errorMessage($error): string
+    {
+        if (is_array($error)) {
+            $error = $error["message"] ?? $error["description"] ?? json_encode($error);
+        }
+
+        return is_string($error) ? $error : (string) json_encode($error);
+    }
+
+    /**
+     * Build a message for an error status whose body has no `error` key.
+     *
+     * @param array<string, mixed> $contents
+     */
+    private function statusErrorMessage(ResponseInterface $response, array $contents): string
+    {
+        foreach (["message", "description", "errorMessage"] as $key) {
+            if (isset($contents[$key]) && is_string($contents[$key]) && $contents[$key] !== "") {
+                return $contents[$key];
+            }
+        }
+
+        $reasonPhrase = $response->getReasonPhrase();
+
+        return "API responded with status " . $response->getStatusCode()
+            . ($reasonPhrase === "" ? "." : " (" . $reasonPhrase . ").");
     }
 }

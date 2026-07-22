@@ -82,6 +82,48 @@ final class RequestTransportTest extends TestCase
         $this->testApiErrorHandlingFor(["message" => $message]);
     }
 
+    public function testShouldCarryStatusCodeAndBodyOnApiError(): void
+    {
+        try {
+            $this->testApiErrorHandlingFor(["message" => "Cobrança não encontrada."]);
+            $this->fail("Expected " . ApiErrorException::class . " to be thrown.");
+        } catch (ApiErrorException $apiErrorException) {
+            $this->assertSame(400, $apiErrorException->getStatusCode());
+            $this->assertSame(
+                ["error" => ["message" => "Cobrança não encontrada."]],
+                $apiErrorException->getBody()
+            );
+        }
+    }
+
+    public function testShouldRejectErrorStatusWithoutErrorKey(): void
+    {
+        try {
+            $this->transportResponseBody('{"message": "forbidden"}', 403);
+            $this->fail("Expected " . ApiErrorException::class . " to be thrown.");
+        } catch (ApiErrorException $apiErrorException) {
+            $this->assertSame("forbidden", $apiErrorException->getMessage());
+            $this->assertSame(403, $apiErrorException->getStatusCode());
+            $this->assertSame(["message" => "forbidden"], $apiErrorException->getBody());
+        }
+    }
+
+    public function testShouldRejectErrorStatusWithoutAnyKnownMessage(): void
+    {
+        try {
+            $this->transportResponseBody('{"foo": "bar"}', 429);
+            $this->fail("Expected " . ApiErrorException::class . " to be thrown.");
+        } catch (ApiErrorException $apiErrorException) {
+            $this->assertSame("API responded with status 429.", $apiErrorException->getMessage());
+            $this->assertSame(429, $apiErrorException->getStatusCode());
+        }
+    }
+
+    public function testShouldHandleNoContentResponse(): void
+    {
+        $this->assertSame([], $this->transportResponseBody("", 204));
+    }
+
     public function testShouldHandleTruncatedResponseBody(): void
     {
         try {
@@ -106,7 +148,10 @@ final class RequestTransportTest extends TestCase
         }
     }
 
-    private function transportResponseBody(string $body, int $statusCode): void
+    /**
+     * @return array<string, mixed>
+     */
+    private function transportResponseBody(string $body, int $statusCode): array
     {
         $requestMock = $this->createMock(RequestInterface::class);
         $requestMock
@@ -134,7 +179,7 @@ final class RequestTransportTest extends TestCase
             $this->createMock(StreamFactoryInterface::class),
         );
 
-        $requestTransport->transport($requestMock);
+        return $requestTransport->transport($requestMock);
     }
 
     /**
